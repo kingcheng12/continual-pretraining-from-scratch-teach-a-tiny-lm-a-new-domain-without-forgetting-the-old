@@ -89,3 +89,103 @@ def load_domains(max_chars=600000, val_frac=0.1):
 
     return domains
 
+# Step 5 - TinyGPT
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+
+
+class Block(nn.Module):
+    def __init__(self, d, heads):
+        super().__init__()
+
+        assert d % heads == 0
+
+        self.heads = heads
+        self.head_dim = d // heads
+
+        self.ln1 = nn.LayerNorm(d)
+        self.ln2 = nn.LayerNorm(d)
+
+        # Attention projections
+        self.qkv = nn.Linear(d, 3 * d)
+        self.proj = nn.Linear(d, d)
+
+        # Feed-forward network
+        self.fc1 = nn.Linear(d, 4 * d)
+        self.fc2 = nn.Linear(4 * d, d)
+
+    def forward(self, x):
+        B, T, D = x.shape
+
+        # 1. Pre-LayerNorm
+        h = self.ln1(x)
+
+        # 2. Generate Q, K, V
+        q, k, v = self.qkv(h).chunk(3, dim=-1)
+
+        # (B, T, D) -> (B, heads, T, head_dim)
+        q = q.view(B, T, self.heads, self.head_dim).transpose(1, 2)
+        k = k.view(B, T, self.heads, self.head_dim).transpose(1, 2)
+        v = v.view(B, T, self.heads, self.head_dim).transpose(1, 2)
+
+        # 3. Causal scaled dot-product attention
+        attn = F.scaled_dot_product_attention(
+            q, k, v, is_causal=True
+        )
+
+        # 4. Concatenate heads
+        attn = attn.transpose(1, 2).contiguous().view(B, T, D)
+
+        # 5. Attention residual connection
+        x = x + self.proj(attn)
+
+        # 6. Feed-forward network with residual
+        h = self.ln2(x)
+        x = x + self.fc2(F.gelu(self.fc1(h)))
+
+        return x
+
+
+class TinyGPT(nn.Module):
+    def __init__(self, vocab, d=64, heads=4, layers=2, max_len=64):
+        super().__init__()
+
+        self.max_len = max_len
+
+        # Token and positional embeddings
+        self.wte = nn.Embedding(vocab, d)
+        self.wpe = nn.Embedding(max_len, d)
+
+        # Transformer blocks
+        self.blocks = nn.ModuleList([
+            Block(d, heads) for _ in range(layers)
+        ])
+
+        # Final layer normalization
+        self.lnf = nn.LayerNorm(d)
+
+        # Vocabulary projection
+        self.head = nn.Linear(d, vocab, bias=False)
+
+    def forward(self, idx):
+        B, T = idx.shape
+
+        if T > self.max_len:
+            raise ValueError("Sequence length exceeds max_len")
+
+        # 1. Token + positional embeddings
+        positions = torch.arange(T, device=idx.device)
+
+        x = self.wte(idx) + self.wpe(positions)
+
+        # 2. Transformer blocks
+        for block in self.blocks:
+            x = block(x)
+
+        # 3. Final normalization and logits
+        x = self.lnf(x)
+        logits = self.head(x)
+
+        return logits
+
