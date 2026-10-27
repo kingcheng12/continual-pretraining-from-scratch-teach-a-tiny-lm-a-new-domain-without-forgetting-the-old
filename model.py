@@ -206,3 +206,34 @@ def lm_loss(model, x, y):
 
     return F.cross_entropy(logits, targets, reduction="mean")
 
+# Step 7 - eval_loss
+import torch
+
+
+@torch.no_grad()
+def eval_loss(model, ids, T, n_batches, seed, batch=32):
+    # Reproducible random sampling
+    generator = torch.Generator().manual_seed(seed)
+
+    # Save original training mode
+    was_training = model.training
+    model.eval()
+
+    losses = []
+    device = next(model.parameters()).device
+
+    try:
+        for _ in range(n_batches):
+            x, y = make_batch(ids, T, batch, generator)
+
+            x = x.to(device)
+            y = y.to(device)
+
+            loss = lm_loss(model, x, y)
+            losses.append(loss.item())
+
+        return sum(losses) / len(losses)
+
+    finally:
+        model.train(was_training)
+
