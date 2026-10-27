@@ -65,3 +65,27 @@ def make_batch(ids, T, batch, generator):
 
     return x, y
 
+# Step 4 - load_domains
+def load_domains(max_chars=600000, val_frac=0.1):
+    # Fetch text from both domains
+    texts = {
+        name: fetch_text(url, name, max_chars)
+        for name, url in URLS.items()
+    }
+
+    tok = CharTokenizer(list(texts.values()))
+
+    domains = {"tok": tok}
+
+    for key, name in [("A", "stories"), ("B", "shakespeare")]:
+        ids = tok.encode(texts[name])
+        split_idx = int(len(ids) * (1 - val_frac))
+
+        domains[key] = {
+            "name": name,
+            "train": ids[:split_idx],
+            "val": ids[split_idx:]
+        }
+
+    return domains
+
