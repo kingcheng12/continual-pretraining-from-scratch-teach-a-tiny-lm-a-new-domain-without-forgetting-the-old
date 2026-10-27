@@ -48,3 +48,20 @@ class CharTokenizer:
     def __len__(self):
         return len(self.itos)
 
+# Step 3 - make_batch
+import torch
+
+
+def make_batch(ids, T, batch, generator):
+    # TODO: random starts, (batch, T) inputs and next-character targets
+    starts = torch.randint(
+        0, len(ids) - T,
+        (batch,),
+        generator=generator
+    )
+
+    x = torch.stack([ids[i:i+T] for i in starts])
+    y = torch.stack([ids[i+1:i+T+1] for i in starts])
+
+    return x, y
+
