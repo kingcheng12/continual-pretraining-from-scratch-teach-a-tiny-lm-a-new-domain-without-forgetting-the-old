@@ -189,3 +189,20 @@ class TinyGPT(nn.Module):
 
         return logits
 
+# Step 6 - lm_loss
+import torch
+import torch.nn.functional as F
+
+
+def lm_loss(model, x, y):
+    # logits: (B, T, vocab)
+    logits = model(x)
+
+    B, T, V = logits.shape
+
+    # Flatten for cross-entropy
+    logits = logits.reshape(B * T, V)
+    targets = y.reshape(B * T)
+
+    return F.cross_entropy(logits, targets, reduction="mean")
+
