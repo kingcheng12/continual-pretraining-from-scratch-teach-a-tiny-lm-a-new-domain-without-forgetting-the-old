@@ -27,3 +27,24 @@ def fetch_text(url, name, max_chars):
 
     return text
 
+# Step 2 - CharTokenizer
+import torch
+
+
+class CharTokenizer:
+    def __init__(self, texts):
+        self.itos = sorted(set("".join(texts)))
+        self.stoi = {ch: i for i, ch in enumerate(self.itos)}
+
+    def encode(self, s):
+        return torch.tensor(
+            [self.stoi[ch] for ch in s if ch in self.stoi],
+            dtype=torch.long
+        )
+
+    def decode(self, ids):
+        return "".join(self.itos[int(i)] for i in ids)
+
+    def __len__(self):
+        return len(self.itos)
+
